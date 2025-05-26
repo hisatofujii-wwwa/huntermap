@@ -18,15 +18,6 @@
   </style>
 </head>
 <body>
-  <script>
-  const correctPassword = "odawara2025"; // 任意のパスワードに変更してください
-  const input = prompt("パスワードを入力してください：");
-
-  if (input !== correctPassword) {
-    document.body.innerHTML = "<h2>パスワードが正しくありません。</h2>";
-    throw new Error("Unauthorized access");
-  }
-</script>
   <div id="map"></div>
   <div id="zoom-level" style="position: absolute; top: 10px; right: 10px; background: white; padding: 4px 8px; border: 1px solid #ccc; font-size: 14px; z-index: 1000;">
     Zoom: 10
