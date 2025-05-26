@@ -200,6 +200,7 @@ function registerMarkerToList(docId, name, latlng, marker) {
   item.style.marginBottom = "4px";
   item.onclick = () => {
     map.setView(latlng, 18);
+    markerListDiv.style.display = "none";
     // marker.openPopup(); // 一覧からのジャンプではポップアップを開かない
   };
   markerListDiv.appendChild(item);
