@@ -141,7 +141,7 @@
     shadowSize: [41, 41]
   });
 
-  map.locate({ setView: true, maxZoom: 16 });
+  map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
 
 map.on('locationfound', function(e) {
   const radius = e.accuracy / 2;
@@ -198,11 +198,11 @@ function registerMarkerToList(docId, name, latlng, marker) {
   item.textContent = name;
   item.style.cursor = "pointer";
   item.style.marginBottom = "4px";
-  item.onclick = () => {
+  item.addEventListener("click", () => {
     map.setView(latlng, 18);
     markerListDiv.style.display = "none";
     // marker.openPopup(); // 一覧からのジャンプではポップアップを開かない
-  };
+  });
   markerListDiv.appendChild(item);
 }
 
@@ -507,7 +507,7 @@ document.getElementById("cancel-marker-btn").addEventListener("click", () => {
   });
 
 document.getElementById("locate-btn").addEventListener("click", () => {
-  map.locate({ setView: true, maxZoom: 16 });
+  map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
 });
 
 // 「エリア追加」ボタンの処理
