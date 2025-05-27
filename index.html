@@ -15,6 +15,16 @@
       white-space: normal;
       line-height: 1.3;
     }
+    .marker-number-label {
+      background: transparent;
+      color: black;
+      font-weight: bold;
+      font-size: 12px;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -37,7 +47,7 @@
         <option value="" disabled selected>エリアを選択</option>
       </select><br>
     </div>
-    <label for="form-marker-name">名前:</label>
+    <label for="form-marker-name">番号:</label>
     <input type="text" id="form-marker-name" placeholder="マーカー名">
     <select id="kukuri-number" style="display: none;">
       <option value="">番号を選択</option>
@@ -217,6 +227,19 @@ async function loadMarkers() {
     const data = docSnap.data();
     const icon = markerIcons[data.type] || defaultIcon;
     const marker = L.marker([data.lat, data.lng], { icon }).addTo(map);
+    // --- 番号だけの常時ツールチップを追加 ---
+    // 最後の数値（全角・半角混在回避のため）を抽出
+    const numberOnlyMatch = data.name.match(/(\d+)(?!.*\d)/);
+    const numberOnly = numberOnlyMatch ? numberOnlyMatch[1] : null;
+    if (numberOnly) {
+      marker.bindTooltip(numberOnly, {
+        permanent: true,
+        direction: "right",
+        className: "marker-number-label",
+        offset: [18, 0]
+      });
+    }
+    // --- 既存のポップアップ・ツールチップ ---
     const btnId = `delete-btn-${docSnap.id}`;
     const editBtnId = `edit-btn-${docSnap.id}`;
     marker.bindPopup(`
