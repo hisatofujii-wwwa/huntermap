@@ -180,8 +180,7 @@ map.on('locationfound', function(e) {
     maxZoom: 20
   }).addTo(map);
 
-// Firebaseから読み込み ＋ 削除・編集ボタンにイベント追加
-const querySnapshot = await getDocs(collection(db, "markers"));
+// マーカーとリスト管理
 const markersMap = new Map();
 const markerListBtn = document.getElementById("marker-list-btn");
 const markerListDiv = document.getElementById("marker-list");
@@ -190,10 +189,8 @@ markerListBtn.addEventListener("click", () => {
   markerListDiv.style.display = markerListDiv.style.display === "none" ? "block" : "none";
 });
 
-// マーカー追加後や読み込み時に、マーカーとデータをMapに登録し、リストに表示する関数
 function registerMarkerToList(docId, name, latlng, marker) {
   markersMap.set(docId, marker);
-
   const item = document.createElement("div");
   item.textContent = name;
   item.style.cursor = "pointer";
@@ -201,124 +198,119 @@ function registerMarkerToList(docId, name, latlng, marker) {
   item.addEventListener("click", () => {
     map.setView(latlng, 18);
     markerListDiv.style.display = "none";
-    // marker.openPopup(); // 一覧からのジャンプではポップアップを開かない
   });
   markerListDiv.appendChild(item);
 }
 
-querySnapshot.forEach((docSnap) => {
-  const data = docSnap.data();
-  const icon = markerIcons[data.type] || defaultIcon;
-  const marker = L.marker([data.lat, data.lng], { icon }).addTo(map);
-  // 吹き出しの中にユニークなボタンIDを割り当て
-  const btnId = `delete-btn-${docSnap.id}`;
-  const editBtnId = `edit-btn-${docSnap.id}`;
-  marker.bindPopup(`
-    <b id="marker-name-${docSnap.id}">${data.name}</b><br>
-    <small>GPS: ${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}</small><br>
-    ${data.memo ? `<div><small>📝 ${data.memo}</small></div>` : ""}
-    ${data.member ? `<div><small>設置者: ${data.member}</small></div>` : ""}
-    <a href="https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}" target="_blank">📍 地図アプリで開く</a><br>
-    <button id="${editBtnId}">✏️ 編集</button>
-    <button id="${btnId}">🗑 削除</button>
-  `);
-  // 名前とメモを同時にツールチップ表示（改行は<br>で表現し、HTML有効化）
-  const tooltipText = data.memo
-    ? `<div class="custom-tooltip"><strong>${data.name}</strong><br>${data.memo}</div>`
-    : `<div class="custom-tooltip"><strong>${data.name}</strong></div>`;
-  marker.bindTooltip(tooltipText, {
-    permanent: false,
-    direction: "top",
-    className: "leaflet-tooltip-own",
-    sticky: true,
-    opacity: 0.9
-  });
-  registerMarkerToList(docSnap.id, data.name, marker.getLatLng(), marker);
-
-  // 吹き出しが開かれたときにボタンにイベントを設定
-  marker.on('popupopen', async () => {
-    setTimeout(async () => {
-      const btn = document.getElementById(btnId);
-      if (btn) {
-        btn.onclick = async () => {
-          if (confirm("このマーカーを削除しますか？")) {
-            await deleteDoc(doc(db, "markers", docSnap.id));
-            map.removeLayer(marker);
-          }
-        };
-      }
-      // 編集ボタンの処理
-      const editBtn = document.getElementById(editBtnId);
-      if (editBtn) {
-        editBtn.onclick = async () => {
-          // 最新のドキュメントデータをFirestoreから取得
-          const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-          const snap = await getDoc(doc(db, "markers", docSnap.id));
-          const currentData = snap.data();
-          const popupContent = document.createElement("div");
-          popupContent.innerHTML = `
-            <label>名前:</label><br>
-            <input id="edit-name-${docSnap.id}" value="${currentData.name}" style="width: 90%;"><br>
-            <label>メモ:</label><br>
-            <textarea id="edit-memo-${docSnap.id}" rows="3" style="width: 90%;">${currentData.memo || ""}</textarea><br>
-            <label>設置者:</label><br>
-            <select id="edit-member-${docSnap.id}" style="width: 90%;">
-            </select><br>
-            <button id="save-edit-${docSnap.id}">保存</button>
-            <button id="cancel-edit-${docSnap.id}">キャンセル</button>
-          `;
-          // メンバーセレクトの選択肢を埋める
-          const memberSelectEdit = popupContent.querySelector(`#edit-member-${docSnap.id}`);
-          memberSelectEdit.innerHTML = "";
-          membersList.forEach(name => {
-            const opt = document.createElement("option");
-            opt.value = name;
-            opt.textContent = name;
-            if (name === currentData.member) opt.selected = true;
-            memberSelectEdit.appendChild(opt);
-          });
-          marker.setPopupContent(popupContent);
-
-          setTimeout(() => {
-            document.getElementById(`save-edit-${docSnap.id}`).onclick = async () => {
-              const newName = document.getElementById(`edit-name-${docSnap.id}`).value.trim();
-              const newMemo = document.getElementById(`edit-memo-${docSnap.id}`).value.trim();
-              const updatedMember = document.getElementById(`edit-member-${docSnap.id}`).value;
-              const today = new Date();
-              const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
-              const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
-
-              await updateDoc(doc(db, "markers", docSnap.id), {
-                name: newName,
-                memo: memoWithDate,
-                member: updatedMember
-              });
-
-              marker.setPopupContent(`
-                <b id="marker-name-${docSnap.id}">${newName}</b><br>
-                <small>GPS: ${currentData.lat.toFixed(6)}, ${currentData.lng.toFixed(6)}</small><br>
-                ${memoWithDate ? `<div><small>📝 ${memoWithDate}</small></div>` : ""}
-                ${updatedMember ? `<div><small>設置者: ${updatedMember}</small></div>` : ""}
-                <a href="https://www.google.com/maps/search/?api=1&query=${currentData.lat},${currentData.lng}" target="_blank">📍 地図アプリで開く</a><br>
-                <button id="edit-btn-${docSnap.id}">✏️ 編集</button>
-                <button id="delete-btn-${docSnap.id}">🗑 削除</button>
-              `);
-              // 編集メニューとポップアップを閉じる
-              marker.closePopup();
-            };
-            // キャンセルボタンの処理
-            const cancelBtn = document.getElementById(`cancel-edit-${docSnap.id}`);
-            if (cancelBtn) {
-              cancelBtn.onclick = () => {
-                marker.closePopup();
-              };
+// マーカー一覧をクリアし、再取得して再描画する関数
+async function loadMarkers() {
+  // 既存マーカーを全て削除
+  for (const [id, marker] of markersMap.entries()) {
+    map.removeLayer(marker);
+  }
+  markersMap.clear();
+  // リストもクリア
+  markerListDiv.innerHTML = "";
+  // Firebaseから再取得
+  const querySnapshot = await getDocs(collection(db, "markers"));
+  querySnapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    const icon = markerIcons[data.type] || defaultIcon;
+    const marker = L.marker([data.lat, data.lng], { icon }).addTo(map);
+    const btnId = `delete-btn-${docSnap.id}`;
+    const editBtnId = `edit-btn-${docSnap.id}`;
+    marker.bindPopup(`
+      <b id="marker-name-${docSnap.id}">${data.name}</b><br>
+      <small>GPS: ${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}</small><br>
+      ${data.memo ? `<div><small>📝 ${data.memo}</small></div>` : ""}
+      ${data.member ? `<div><small>設置者: ${data.member}</small></div>` : ""}
+      <a href="https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}" target="_blank">📍 地図アプリで開く</a><br>
+      <button id="${editBtnId}">✏️ 編集</button>
+      <button id="${btnId}">🗑 削除</button>
+    `);
+    const tooltipText = data.memo
+      ? `<div class="custom-tooltip"><strong>${data.name}</strong><br>${data.memo}</div>`
+      : `<div class="custom-tooltip"><strong>${data.name}</strong></div>`;
+    marker.bindTooltip(tooltipText, {
+      permanent: false,
+      direction: "top",
+      className: "leaflet-tooltip-own",
+      sticky: true,
+      opacity: 0.9
+    });
+    registerMarkerToList(docSnap.id, data.name, marker.getLatLng(), marker);
+    marker.on('popupopen', async () => {
+      setTimeout(async () => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+          btn.onclick = async () => {
+            if (confirm("このマーカーを削除しますか？")) {
+              await deleteDoc(doc(db, "markers", docSnap.id));
+              // 削除後にマーカーを再読込
+              await loadMarkers();
             }
-          }, 100);
-        };
-      }
-    }, 100); // 100ミリ秒後に実行
+          };
+        }
+        const editBtn = document.getElementById(editBtnId);
+        if (editBtn) {
+          editBtn.onclick = async () => {
+            const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+            const snap = await getDoc(doc(db, "markers", docSnap.id));
+            const currentData = snap.data();
+            const popupContent = document.createElement("div");
+            popupContent.innerHTML = `
+              <label>名前:</label><br>
+              <input id="edit-name-${docSnap.id}" value="${currentData.name}" style="width: 90%;"><br>
+              <label>メモ:</label><br>
+              <textarea id="edit-memo-${docSnap.id}" rows="3" style="width: 90%;">${currentData.memo || ""}</textarea><br>
+              <label>設置者:</label><br>
+              <select id="edit-member-${docSnap.id}" style="width: 90%;">
+              </select><br>
+              <button id="save-edit-${docSnap.id}">保存</button>
+              <button id="cancel-edit-${docSnap.id}">キャンセル</button>
+            `;
+            const memberSelectEdit = popupContent.querySelector(`#edit-member-${docSnap.id}`);
+            memberSelectEdit.innerHTML = "";
+            membersList.forEach(name => {
+              const opt = document.createElement("option");
+              opt.value = name;
+              opt.textContent = name;
+              if (name === currentData.member) opt.selected = true;
+              memberSelectEdit.appendChild(opt);
+            });
+            marker.setPopupContent(popupContent);
+            setTimeout(() => {
+              document.getElementById(`save-edit-${docSnap.id}`).onclick = async () => {
+                const newName = document.getElementById(`edit-name-${docSnap.id}`).value.trim();
+                const newMemo = document.getElementById(`edit-memo-${docSnap.id}`).value.trim();
+                const updatedMember = document.getElementById(`edit-member-${docSnap.id}`).value;
+                const today = new Date();
+                const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
+                const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
+                await updateDoc(doc(db, "markers", docSnap.id), {
+                  name: newName,
+                  memo: memoWithDate,
+                  member: updatedMember
+                });
+                // 編集保存後にマーカーを再読込
+                await loadMarkers();
+              };
+              const cancelBtn = document.getElementById(`cancel-edit-${docSnap.id}`);
+              if (cancelBtn) {
+                cancelBtn.onclick = () => {
+                  marker.closePopup();
+                };
+              }
+            }, 100);
+          };
+        }
+      }, 100);
+    });
   });
-});
+}
+
+// 初期表示
+await loadMarkers();
 
 // ここでareasコレクションからエリア情報を読み込み、kukuri-prefixに追加
 const areaSnapshot = await getDocs(collection(db, "areas"));
@@ -376,8 +368,7 @@ document.getElementById("add-marker-btn").addEventListener("click", async () => 
     }
   }
   const selectedMember = document.getElementById("form-member-name").value;
-
-  const newDoc = await addDoc(collection(db, "markers"), {
+  await addDoc(collection(db, "markers"), {
     name,
     lat: pendingLatLng.lat,
     lng: pendingLatLng.lng,
@@ -386,107 +377,8 @@ document.getElementById("add-marker-btn").addEventListener("click", async () => 
     member: selectedMember,
     timestamp: new Date()
   });
-
-  const marker = L.marker([pendingLatLng.lat, pendingLatLng.lng], { icon: markerIcons[type] }).addTo(map);
-  const btnId = `delete-btn-${newDoc.id}`;
-  const editBtnId = `edit-btn-${newDoc.id}`;
-  marker.bindPopup(`
-    <b id="marker-name-${newDoc.id}">${name}</b><br>
-    <small>GPS: ${pendingLatLng.lat.toFixed(6)}, ${pendingLatLng.lng.toFixed(6)}</small><br>
-    ${selectedMember ? `<div><small>設置者: ${selectedMember}</small></div>` : ""}
-    <a href="https://www.google.com/maps/search/?api=1&query=${pendingLatLng.lat},${pendingLatLng.lng}" target="_blank">📍 地図アプリで開く</a><br>
-    <button id="${editBtnId}">✏️ 編集</button>
-    <button id="${btnId}">🗑 削除</button>
-  `);
-  // 名前とメモを同時にツールチップ表示（新規追加時はメモなし、HTML有効化）
-  const tooltipText = `<div class="custom-tooltip"><strong>${name}</strong></div>`;
-  marker.bindTooltip(tooltipText, {
-    permanent: false,
-    direction: "top",
-    className: "leaflet-tooltip-own",
-    sticky: true,
-    opacity: 0.9
-  });
-  registerMarkerToList(newDoc.id, name, marker.getLatLng(), marker);
-
-  marker.on('popupopen', async () => {
-    setTimeout(async () => {
-      const btn = document.getElementById(btnId);
-      if (btn) {
-        btn.onclick = async () => {
-          if (confirm("このマーカーを削除しますか？")) {
-            await deleteDoc(doc(db, "markers", newDoc.id));
-            map.removeLayer(marker);
-          }
-        };
-      }
-      const editBtn = document.getElementById(editBtnId);
-      if (editBtn) {
-        editBtn.onclick = async () => {
-          const popupContent = document.createElement("div");
-          popupContent.innerHTML = `
-            <label>名前:</label><br>
-            <input id="edit-name-${newDoc.id}" value="${name}" style="width: 90%;"><br>
-            <label>メモ:</label><br>
-            <textarea id="edit-memo-${newDoc.id}" rows="3" style="width: 90%;"></textarea><br>
-            <label>設置者:</label><br>
-            <select id="edit-member-${newDoc.id}" style="width: 90%;">
-            </select><br>
-            <button id="save-edit-${newDoc.id}">保存</button>
-            <button id="cancel-edit-${newDoc.id}">キャンセル</button>
-          `;
-          // メンバーセレクトの選択肢を埋める
-          const memberSelectEdit = popupContent.querySelector(`#edit-member-${newDoc.id}`);
-          memberSelectEdit.innerHTML = "";
-          membersList.forEach(n => {
-            const opt = document.createElement("option");
-            opt.value = n;
-            opt.textContent = n;
-            if (n === selectedMember) opt.selected = true;
-            memberSelectEdit.appendChild(opt);
-          });
-          marker.setPopupContent(popupContent);
-
-          setTimeout(() => {
-            document.getElementById(`save-edit-${newDoc.id}`).onclick = async () => {
-              const newName = document.getElementById(`edit-name-${newDoc.id}`).value.trim();
-              const newMemo = document.getElementById(`edit-memo-${newDoc.id}`).value.trim();
-              const updatedMember = document.getElementById(`edit-member-${newDoc.id}`).value;
-              const today = new Date();
-              const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
-              const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
-
-              await updateDoc(doc(db, "markers", newDoc.id), {
-                name: newName,
-                memo: memoWithDate,
-                member: updatedMember
-              });
-
-              marker.setPopupContent(`
-                <b id="marker-name-${newDoc.id}">${newName}</b><br>
-                <small>GPS: ${pendingLatLng.lat.toFixed(6)}, ${pendingLatLng.lng.toFixed(6)}</small><br>
-                ${memoWithDate ? `<div><small>📝 ${memoWithDate}</small></div>` : ""}
-                ${updatedMember ? `<div><small>設置者: ${updatedMember}</small></div>` : ""}
-                <a href="https://www.google.com/maps/search/?api=1&query=${pendingLatLng.lat},${pendingLatLng.lng}" target="_blank">📍 地図アプリで開く</a><br>
-                <button id="edit-btn-${newDoc.id}">✏️ 編集</button>
-                <button id="delete-btn-${newDoc.id}">🗑 削除</button>
-              `);
-              // 編集メニューとポップアップを閉じる
-              marker.closePopup();
-            };
-            // キャンセルボタンの処理
-            const cancelBtn = document.getElementById(`cancel-edit-${newDoc.id}`);
-            if (cancelBtn) {
-              cancelBtn.onclick = () => {
-                marker.closePopup();
-              };
-            }
-          }, 100);
-        };
-      }
-    }, 100);
-  });
-
+  // 追加後にマーカーを再読込
+  await loadMarkers();
   document.getElementById("marker-form").style.display = "none";
   document.getElementById("form-marker-name").value = "";
   document.getElementById("kukuri-prefix").value = "";
