@@ -19,11 +19,12 @@
       background: transparent;
       color: black;
       font-weight: bold;
-      font-size: 12px;
+      font-size: 14px;
       border: none;
       box-shadow: none;
       padding: 0;
       pointer-events: none;
+      z-index: 1001;
     }
   </style>
 </head>
@@ -121,9 +122,9 @@
 
   const markerIcons = {
     kukuri: L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/3539/3539196.png',
-      iconSize: [32, 32],
-      iconAnchor: [16, 32]
+      iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAn4B9VLXQioAAAAASUVORK5CYII=',
+      iconSize: [1, 1],
+      iconAnchor: [0, 0]
     }),
     hako: L.icon({
       iconUrl: 'https://cdn-icons-png.flaticon.com/512/1018/1018402.png',
@@ -227,16 +228,29 @@ async function loadMarkers() {
     const data = docSnap.data();
     const icon = markerIcons[data.type] || defaultIcon;
     const marker = L.marker([data.lat, data.lng], { icon }).addTo(map);
-    // --- 番号だけの常時ツールチップを追加 ---
+    // --- 番号だけの常時ラベルをDivIconで追加 ---
     // 最後の数値（全角・半角混在回避のため）を抽出
     const numberOnlyMatch = data.name.match(/(\d+)(?!.*\d)/);
     const numberOnly = numberOnlyMatch ? numberOnlyMatch[1] : null;
+    let numberMarker = null;
     if (numberOnly) {
-      marker.bindTooltip(numberOnly, {
-        permanent: true,
-        direction: "right",
-        className: "marker-number-label",
-        offset: [18, 0]
+      const numberLabel = L.divIcon({
+        html: `<div class="marker-number-label">${numberOnly}</div>`,
+        className: '',
+        iconSize: [20, 20],
+        iconAnchor: [-10, 10]
+      });
+      numberMarker = L.marker([data.lat, data.lng], { icon: numberLabel, interactive: true });
+      numberMarker.on('click', () => {
+        marker.openPopup();
+      });
+      numberMarker.addTo(map);
+      numberMarker.bindTooltip(data.name, {
+        permanent: false,
+        direction: "top",
+        className: "leaflet-tooltip-own",
+        sticky: true,
+        opacity: 0.9
       });
     }
     // --- 既存のポップアップ・ツールチップ ---
@@ -262,14 +276,30 @@ async function loadMarkers() {
       opacity: 0.9
     });
     registerMarkerToList(docSnap.id, data.name, marker.getLatLng(), marker);
+    // 拡張: 番号ラベルもMapに入れておく(キーを `${docSnap.id}-number` で)
+    if (numberMarker) {
+      markersMap.set(`${docSnap.id}-number`, numberMarker);
+    }
     marker.on('popupopen', async () => {
       setTimeout(async () => {
         const btn = document.getElementById(btnId);
         if (btn) {
           btn.onclick = async () => {
             if (confirm("このマーカーを削除しますか？")) {
+              // Remove the marker from the map immediately
+              const targetMarker = markersMap.get(docSnap.id);
+              if (targetMarker) {
+                map.removeLayer(targetMarker);
+                markersMap.delete(docSnap.id);
+              }
+              // Remove the number label marker (if any)
+              const numberLabelMarker = markersMap.get(`${docSnap.id}-number`);
+              if (numberLabelMarker) {
+                map.removeLayer(numberLabelMarker);
+                markersMap.delete(`${docSnap.id}-number`);
+              }
               await deleteDoc(doc(db, "markers", docSnap.id));
-              // 削除後にマーカーを再読込
+              // Also reload to ensure complete cleanup
               await loadMarkers();
             }
           };
