@@ -124,6 +124,7 @@
   let currentLocationMarker = null;
   let currentLocationCircle = null;
   let locationWatchId = null;
+  let shouldFollowLocation = false;
 
   function startWatchingLocation() {
     locationWatchId = navigator.geolocation.watchPosition(
@@ -161,6 +162,10 @@
         // NOTE: Do NOT center the map here automatically.
         // If you want to center on the current location, use the "現在地へ移動" button.
         // // map.setView(latlng, 18);
+        if (shouldFollowLocation) {
+          map.setView(latlng, 18);
+          shouldFollowLocation = false;
+        }
       },
       (err) => {
         alert("現在地の取得に失敗しました: " + err.message);
@@ -498,6 +503,7 @@ document.getElementById("cancel-marker-btn").addEventListener("click", () => {
 
 document.getElementById("locate-btn").addEventListener("click", () => {
   if (currentLocationMarker) {
+    shouldFollowLocation = true;
     map.setView(currentLocationMarker.getLatLng(), 18);
   } else {
     alert("現在地がまだ取得できていません。しばらく待ってから再度お試しください。");
