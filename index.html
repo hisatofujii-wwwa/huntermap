@@ -3,11 +3,8 @@
 <head>
   <title>HunterMap App</title>
   <meta charset="utf-8" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css?v=20240601" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body, html { margin: 0; padding: 0; height: 100%; }
     #map { width: 100%; height: 100vh; }
@@ -86,7 +83,7 @@
   </div>
 
   <!-- Leaflet -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js?v=20240601"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- Firebase SDK -->
   <script type="module">
@@ -160,11 +157,6 @@
         });
 
         currentLocationCircle = L.circle(latlng, radius).addTo(map);
-
-        // NOTE: Do NOT center the map here automatically.
-        // If you want to center on the current location, use the "現在地へ移動" button.
-        // // map.setView(latlng, 18);
-        // 地図の自動移動は行わない
       },
       (err) => {
         alert("現在地の取得に失敗しました: " + err.message);
@@ -540,4 +532,3 @@ document.getElementById("add-member-btn").addEventListener("click", async () => 
 </script>
 </body>
 </html>
-// （自動追従機能は廃止したため、地図操作による追従解除ロジックも不要です）
