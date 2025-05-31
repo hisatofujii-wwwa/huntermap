@@ -542,9 +542,14 @@ document.getElementById("add-member-btn").addEventListener("click", async () => 
 </script>
 </body>
 </html>
-// 地図を手動で動かしたら現在地追従をオフにする
+// 地図を手動で動かしたら現在地追従を完全に解除する
 ['movestart', 'dragstart', 'mousedown', 'touchstart'].forEach(eventType => {
   map.on(eventType, () => {
     shouldFollowLocation = false;
+    // 一度オフにしたら、以後ボタンを押すまで自動追従は復活しない
+    if (locationWatchId !== null) {
+      navigator.geolocation.clearWatch(locationWatchId);
+      locationWatchId = null;
+    }
   });
 });
