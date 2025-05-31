@@ -542,3 +542,7 @@ document.getElementById("add-member-btn").addEventListener("click", async () => 
 </script>
 </body>
 </html>
+// 地図を手動で動かしたら現在地追従をオフにする
+map.on('movestart', () => {
+  shouldFollowLocation = false;
+});
