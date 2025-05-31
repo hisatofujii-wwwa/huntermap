@@ -157,6 +157,10 @@
         });
 
         currentLocationCircle = L.circle(latlng, radius).addTo(map);
+
+        // NOTE: Do NOT center the map here automatically.
+        // If you want to center on the current location, use the "現在地へ移動" button.
+        // // map.setView(latlng, 18);
       },
       (err) => {
         alert("現在地の取得に失敗しました: " + err.message);
