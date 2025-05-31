@@ -232,12 +232,23 @@ async function loadMarkers() {
   markerListDiv.innerHTML = "";
   // Firebaseから再取得
   const querySnapshot = await getDocs(collection(db, "markers"));
+  const markerArray = [];
   querySnapshot.forEach((docSnap) => {
     const data = docSnap.data();
+    markerArray.push({ id: docSnap.id, data });
+  });
+
+  // 名前順（name）で昇順に並べ替え
+  markerArray.sort((a, b) => {
+    return a.data.name.localeCompare(b.data.name, 'ja');
+  });
+
+  // 並べ替えた順にマーカー処理
+  for (const { id, data } of markerArray) {
     const icon = markerIcons[data.type] || defaultIcon;
     const marker = L.marker([data.lat, data.lng], { icon }).addTo(map);
+
     // --- 番号だけの常時ラベルをDivIconで追加 ---
-    // 最後の数値（全角・半角混在回避のため）を抽出
     const numberOnlyMatch = data.name.match(/(\d+)(?!.*\d)/);
     const numberOnly = numberOnlyMatch ? numberOnlyMatch[1] : null;
     let numberMarker = null;
@@ -261,11 +272,11 @@ async function loadMarkers() {
         opacity: 0.9
       });
     }
-    // --- 既存のポップアップ・ツールチップ ---
-    const btnId = `delete-btn-${docSnap.id}`;
-    const editBtnId = `edit-btn-${docSnap.id}`;
+
+    const btnId = `delete-btn-${id}`;
+    const editBtnId = `edit-btn-${id}`;
     marker.bindPopup(`
-      <b id="marker-name-${docSnap.id}">${data.name}</b><br>
+      <b id="marker-name-${id}">${data.name}</b><br>
       <small>GPS: ${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}</small><br>
       ${data.memo ? `<div><small>📝 ${data.memo}</small></div>` : ""}
       ${data.member ? `<div><small>設置者: ${data.member}</small></div>` : ""}
@@ -283,11 +294,13 @@ async function loadMarkers() {
       sticky: true,
       opacity: 0.9
     });
-    registerMarkerToList(docSnap.id, data.name, marker.getLatLng(), marker);
-    // 拡張: 番号ラベルもMapに入れておく(キーを `${docSnap.id}-number` で)
+
+    registerMarkerToList(id, data.name, marker.getLatLng(), marker);
     if (numberMarker) {
-      markersMap.set(`${docSnap.id}-number`, numberMarker);
+      markersMap.set(`${id}-number`, numberMarker);
     }
+
+    // popupopen イベントハンドラは既存のまま、元のコードから移動してください
     marker.on('popupopen', async () => {
       setTimeout(async () => {
         const btn = document.getElementById(btnId);
@@ -295,18 +308,18 @@ async function loadMarkers() {
           btn.onclick = async () => {
             if (confirm("このマーカーを削除しますか？")) {
               // Remove the marker from the map immediately
-              const targetMarker = markersMap.get(docSnap.id);
+              const targetMarker = markersMap.get(id);
               if (targetMarker) {
                 map.removeLayer(targetMarker);
-                markersMap.delete(docSnap.id);
+                markersMap.delete(id);
               }
               // Remove the number label marker (if any)
-              const numberLabelMarker = markersMap.get(`${docSnap.id}-number`);
+              const numberLabelMarker = markersMap.get(`${id}-number`);
               if (numberLabelMarker) {
                 map.removeLayer(numberLabelMarker);
-                markersMap.delete(`${docSnap.id}-number`);
+                markersMap.delete(`${id}-number`);
               }
-              await deleteDoc(doc(db, "markers", docSnap.id));
+              await deleteDoc(doc(db, "markers", id));
               // Also reload to ensure complete cleanup
               await loadMarkers();
             }
@@ -316,21 +329,21 @@ async function loadMarkers() {
         if (editBtn) {
           editBtn.onclick = async () => {
             const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-            const snap = await getDoc(doc(db, "markers", docSnap.id));
+            const snap = await getDoc(doc(db, "markers", id));
             const currentData = snap.data();
             const popupContent = document.createElement("div");
             popupContent.innerHTML = `
               <label>名前:</label><br>
-              <input id="edit-name-${docSnap.id}" value="${currentData.name}" style="width: 90%;"><br>
+              <input id="edit-name-${id}" value="${currentData.name}" style="width: 90%;"><br>
               <label>メモ:</label><br>
-              <textarea id="edit-memo-${docSnap.id}" rows="3" style="width: 90%;">${currentData.memo || ""}</textarea><br>
+              <textarea id="edit-memo-${id}" rows="3" style="width: 90%;">${currentData.memo || ""}</textarea><br>
               <label>設置者:</label><br>
-              <select id="edit-member-${docSnap.id}" style="width: 90%;">
+              <select id="edit-member-${id}" style="width: 90%;">
               </select><br>
-              <button id="save-edit-${docSnap.id}">保存</button>
-              <button id="cancel-edit-${docSnap.id}">キャンセル</button>
+              <button id="save-edit-${id}">保存</button>
+              <button id="cancel-edit-${id}">キャンセル</button>
             `;
-            const memberSelectEdit = popupContent.querySelector(`#edit-member-${docSnap.id}`);
+            const memberSelectEdit = popupContent.querySelector(`#edit-member-${id}`);
             memberSelectEdit.innerHTML = "";
             membersList.forEach(name => {
               const opt = document.createElement("option");
@@ -341,14 +354,14 @@ async function loadMarkers() {
             });
             marker.setPopupContent(popupContent);
             setTimeout(() => {
-              document.getElementById(`save-edit-${docSnap.id}`).onclick = async () => {
-                const newName = document.getElementById(`edit-name-${docSnap.id}`).value.trim();
-                const newMemo = document.getElementById(`edit-memo-${docSnap.id}`).value.trim();
-                const updatedMember = document.getElementById(`edit-member-${docSnap.id}`).value;
+              document.getElementById(`save-edit-${id}`).onclick = async () => {
+                const newName = document.getElementById(`edit-name-${id}`).value.trim();
+                const newMemo = document.getElementById(`edit-memo-${id}`).value.trim();
+                const updatedMember = document.getElementById(`edit-member-${id}`).value;
                 const today = new Date();
                 const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
                 const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
-                await updateDoc(doc(db, "markers", docSnap.id), {
+                await updateDoc(doc(db, "markers", id), {
                   name: newName,
                   memo: memoWithDate,
                   member: updatedMember
@@ -356,7 +369,7 @@ async function loadMarkers() {
                 // 編集保存後にマーカーを再読込
                 await loadMarkers();
               };
-              const cancelBtn = document.getElementById(`cancel-edit-${docSnap.id}`);
+              const cancelBtn = document.getElementById(`cancel-edit-${id}`);
               if (cancelBtn) {
                 cancelBtn.onclick = () => {
                   marker.closePopup();
@@ -367,7 +380,7 @@ async function loadMarkers() {
         }
       }, 100);
     });
-  });
+  }
 }
 
 // 初期表示
