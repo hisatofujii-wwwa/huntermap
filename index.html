@@ -120,6 +120,57 @@
   }
   const map = L.map('map', { maxZoom: 20 }).setView([35.6895, 139.6917], 10);
 
+  // --- 位置情報のwatchPositionによる現在地追跡 ---
+  let currentLocationMarker = null;
+  let currentLocationCircle = null;
+  let locationWatchId = null;
+
+  function startWatchingLocation() {
+    locationWatchId = navigator.geolocation.watchPosition(
+      (e) => {
+        const latlng = [e.coords.latitude, e.coords.longitude];
+        const radius = e.coords.accuracy / 2;
+
+        // 既存マーカー・円を削除
+        if (currentLocationMarker) map.removeLayer(currentLocationMarker);
+        if (currentLocationCircle) map.removeLayer(currentLocationCircle);
+
+        currentLocationMarker = L.marker(latlng, {
+          icon: L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/1828/1828778.png',
+            iconSize: [36, 36],
+            iconAnchor: [18, 36],
+            popupAnchor: [0, -32]
+          })
+        }).addTo(map)
+          .bindPopup("現在地（精度: " + radius.toFixed(0) + "m）")
+          .openPopup();
+
+        currentLocationMarker.on('click', () => {
+          document.querySelector("#marker-form div").textContent = "現在地に新しいマーカーを追加";
+          pendingLatLng = currentLocationMarker.getLatLng();
+          const point = map.latLngToContainerPoint(pendingLatLng);
+          const form = document.getElementById("marker-form");
+          form.style.left = `${point.x}px`;
+          form.style.top = `${point.y}px`;
+          form.style.display = "block";
+        });
+
+        currentLocationCircle = L.circle(latlng, radius).addTo(map);
+      },
+      (err) => {
+        alert("現在地の取得に失敗しました: " + err.message);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000
+      }
+    );
+  }
+
+  startWatchingLocation();
+
   const markerIcons = {
     kukuri: L.icon({
       iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAn4B9VLXQioAAAAASUVORK5CYII=',
@@ -152,46 +203,6 @@
     shadowSize: [41, 41]
   });
 
-  map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
-
-let currentLocationMarker = null;
-let currentLocationCircle = null;
-
-map.on('locationfound', function(e) {
-  const radius = e.accuracy / 2;
-
-  // 既存のマーカーと円を削除
-  if (currentLocationMarker) map.removeLayer(currentLocationMarker);
-  if (currentLocationCircle) map.removeLayer(currentLocationCircle);
-
-  currentLocationMarker = L.marker(e.latlng, {
-    icon: L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/1828/1828778.png', // X-mark icon
-      iconSize: [36, 36],
-      iconAnchor: [18, 36],
-      popupAnchor: [0, -32]
-    })
-  }).addTo(map)
-    .bindPopup("現在地（精度: " + radius.toFixed(0) + "m）")
-    .openPopup();
-
-  currentLocationMarker.on('click', () => {
-    // 説明文を現在地用に変更
-    document.querySelector("#marker-form div").textContent = "現在地に新しいマーカーを追加";
-    pendingLatLng = currentLocationMarker.getLatLng();
-    const point = map.latLngToContainerPoint(pendingLatLng);
-    const form = document.getElementById("marker-form");
-    form.style.left = `${point.x}px`;
-    form.style.top = `${point.y}px`;
-    form.style.display = "block";
-  });
-
-  currentLocationCircle = L.circle(e.latlng, radius).addTo(map);
-});
-
-  map.on('locationerror', function() {
-    alert("現在地を取得できませんでした。ブラウザの位置情報設定をご確認ください。");
-  });
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap © CARTO',
@@ -340,6 +351,10 @@ async function loadMarkers() {
               <label>設置者:</label><br>
               <select id="edit-member-${id}" style="width: 90%;">
               </select><br>
+              <label>緯度:</label><br>
+              <input id="edit-lat-${id}" value="${currentData.lat}" style="width: 90%;"><br>
+              <label>経度:</label><br>
+              <input id="edit-lng-${id}" value="${currentData.lng}" style="width: 90%;"><br>
               <button id="save-edit-${id}">保存</button>
               <button id="cancel-edit-${id}">キャンセル</button>
             `;
@@ -358,13 +373,18 @@ async function loadMarkers() {
                 const newName = document.getElementById(`edit-name-${id}`).value.trim();
                 const newMemo = document.getElementById(`edit-memo-${id}`).value.trim();
                 const updatedMember = document.getElementById(`edit-member-${id}`).value;
+                // 緯度経度の取得
+                const newLat = parseFloat(document.getElementById(`edit-lat-${id}`).value);
+                const newLng = parseFloat(document.getElementById(`edit-lng-${id}`).value);
                 const today = new Date();
                 const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
                 const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
                 await updateDoc(doc(db, "markers", id), {
                   name: newName,
                   memo: memoWithDate,
-                  member: updatedMember
+                  member: updatedMember,
+                  lat: newLat,
+                  lng: newLng
                 });
                 // 編集保存後にマーカーを再読込
                 await loadMarkers();
@@ -473,7 +493,11 @@ document.getElementById("cancel-marker-btn").addEventListener("click", () => {
   });
 
 document.getElementById("locate-btn").addEventListener("click", () => {
-  map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
+  if (currentLocationMarker) {
+    map.setView(currentLocationMarker.getLatLng(), 18);
+  } else {
+    alert("現在地がまだ取得できていません。しばらく待ってから再度お試しください。");
+  }
 });
 
 // 「エリア追加」ボタンの処理
