@@ -159,7 +159,7 @@ map.on('locationfound', function(e) {
 
   const currentLocationMarker = L.marker(e.latlng, {
     icon: L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/2922/2922510.png',
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/1828/1828778.png',
       iconSize: [40, 40],
       iconAnchor: [20, 40],
       popupAnchor: [0, -36]
@@ -224,7 +224,12 @@ async function loadMarkers() {
   markerListDiv.innerHTML = "";
   // Firebaseから再取得
   const querySnapshot = await getDocs(collection(db, "markers"));
-  querySnapshot.forEach((docSnap) => {
+  const sortedDocs = querySnapshot.docs.sort((a, b) => {
+    const nameA = a.data().name || "";
+    const nameB = b.data().name || "";
+    return nameA.localeCompare(nameB, 'ja');
+  });
+  sortedDocs.forEach((docSnap) => {
     const data = docSnap.data();
     const icon = markerIcons[data.type] || defaultIcon;
     const marker = L.marker([data.lat, data.lng], { icon }).addTo(map);
@@ -306,6 +311,7 @@ async function loadMarkers() {
         }
         const editBtn = document.getElementById(editBtnId);
         if (editBtn) {
+          console.log("Edit button found:", editBtn);
           editBtn.onclick = async () => {
             const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
             const snap = await getDoc(doc(db, "markers", docSnap.id));
@@ -316,9 +322,12 @@ async function loadMarkers() {
               <input id="edit-name-${docSnap.id}" value="${currentData.name}" style="width: 90%;"><br>
               <label>メモ:</label><br>
               <textarea id="edit-memo-${docSnap.id}" rows="3" style="width: 90%;">${currentData.memo || ""}</textarea><br>
+              <label>緯度:</label><br>
+              <input id="edit-lat-${docSnap.id}" value="${currentData.lat}" style="width: 90%;"><br>
+              <label>経度:</label><br>
+              <input id="edit-lng-${docSnap.id}" value="${currentData.lng}" style="width: 90%;"><br>
               <label>設置者:</label><br>
-              <select id="edit-member-${docSnap.id}" style="width: 90%;">
-              </select><br>
+              <select id="edit-member-${docSnap.id}" style="width: 90%;"></select><br>
               <button id="save-edit-${docSnap.id}">保存</button>
               <button id="cancel-edit-${docSnap.id}">キャンセル</button>
             `;
@@ -337,13 +346,18 @@ async function loadMarkers() {
                 const newName = document.getElementById(`edit-name-${docSnap.id}`).value.trim();
                 const newMemo = document.getElementById(`edit-memo-${docSnap.id}`).value.trim();
                 const updatedMember = document.getElementById(`edit-member-${docSnap.id}`).value;
+                // 緯度経度の値を取得
+                const newLat = parseFloat(document.getElementById(`edit-lat-${docSnap.id}`).value);
+                const newLng = parseFloat(document.getElementById(`edit-lng-${docSnap.id}`).value);
                 const today = new Date();
                 const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
                 const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
                 await updateDoc(doc(db, "markers", docSnap.id), {
                   name: newName,
                   memo: memoWithDate,
-                  member: updatedMember
+                  member: updatedMember,
+                  lat: newLat,
+                  lng: newLng
                 });
                 // 編集保存後にマーカーを再読込
                 await loadMarkers();
@@ -356,6 +370,8 @@ async function loadMarkers() {
               }
             }, 100);
           };
+        } else {
+          console.warn("Edit button not found for ID:", editBtnId);
         }
       }, 100);
     });
