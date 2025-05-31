@@ -124,7 +124,6 @@
   let currentLocationMarker = null;
   let currentLocationCircle = null;
   let locationWatchId = null;
-  let shouldFollowLocation = false;
 
   function startWatchingLocation() {
     locationWatchId = navigator.geolocation.watchPosition(
@@ -162,10 +161,7 @@
         // NOTE: Do NOT center the map here automatically.
         // If you want to center on the current location, use the "現在地へ移動" button.
         // // map.setView(latlng, 18);
-        if (shouldFollowLocation) {
-          map.setView(latlng, 18);
-          shouldFollowLocation = false;
-        }
+        // 地図の自動移動は行わない
       },
       (err) => {
         alert("現在地の取得に失敗しました: " + err.message);
@@ -503,7 +499,6 @@ document.getElementById("cancel-marker-btn").addEventListener("click", () => {
 
 document.getElementById("locate-btn").addEventListener("click", () => {
   if (currentLocationMarker) {
-    shouldFollowLocation = true;
     map.setView(currentLocationMarker.getLatLng(), 18);
   } else {
     alert("現在地がまだ取得できていません。しばらく待ってから再度お試しください。");
@@ -542,14 +537,4 @@ document.getElementById("add-member-btn").addEventListener("click", async () => 
 </script>
 </body>
 </html>
-// 地図を手動で動かしたら現在地追従を完全に解除する
-['movestart', 'dragstart', 'mousedown', 'touchstart'].forEach(eventType => {
-  map.on(eventType, () => {
-    shouldFollowLocation = false;
-    // 一度オフにしたら、以後ボタンを押すまで自動追従は復活しない
-    if (locationWatchId !== null) {
-      navigator.geolocation.clearWatch(locationWatchId);
-      locationWatchId = null;
-    }
-  });
-});
+// （自動追従機能は廃止したため、地図操作による追従解除ロジックも不要です）
