@@ -118,7 +118,7 @@
       memberSelect.appendChild(option);
     });
   }
-  const map = L.map('map', { maxZoom: 22 }).setView([35.6895, 139.6917], 10);
+  const map = L.map('map', { maxZoom: 20 }).setView([35.6895, 139.6917], 10);
 
   const markerIcons = {
     kukuri: L.icon({
@@ -154,18 +154,26 @@
 
   map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
 
+let currentLocationMarker = null;
+let currentLocationCircle = null;
+
 map.on('locationfound', function(e) {
   const radius = e.accuracy / 2;
 
-  const currentLocationMarker = L.marker(e.latlng, {
+  // 既存のマーカーと円を削除
+  if (currentLocationMarker) map.removeLayer(currentLocationMarker);
+  if (currentLocationCircle) map.removeLayer(currentLocationCircle);
+
+  currentLocationMarker = L.marker(e.latlng, {
     icon: L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/2922/2922510.png',
-      iconSize: [40, 40],
-      iconAnchor: [20, 40],
-      popupAnchor: [0, -36]
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/1828/1828778.png', // X-mark icon
+      iconSize: [36, 36],
+      iconAnchor: [18, 36],
+      popupAnchor: [0, -32]
     })
   }).addTo(map)
-    .bindPopup("現在地（精度: " + radius.toFixed(0) + "m）").openPopup();
+    .bindPopup("現在地（精度: " + radius.toFixed(0) + "m）")
+    .openPopup();
 
   currentLocationMarker.on('click', () => {
     // 説明文を現在地用に変更
@@ -178,7 +186,7 @@ map.on('locationfound', function(e) {
     form.style.display = "block";
   });
 
-  L.circle(e.latlng, radius).addTo(map);
+  currentLocationCircle = L.circle(e.latlng, radius).addTo(map);
 });
 
   map.on('locationerror', function() {
