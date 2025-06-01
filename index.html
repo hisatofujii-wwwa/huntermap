@@ -41,6 +41,7 @@
       <option value="hako">箱罠</option>
       <option value="koya">小屋</option>
       <option value="parking">駐車場</option>
+      <option value="text">テキスト</option>
     </select><br>
     <div id="kukuri-prefix-container" style="display: none;">
       <label for="kukuri-prefix">エリア:</label>
@@ -48,7 +49,7 @@
         <option value="" disabled selected>エリアを選択</option>
       </select><br>
     </div>
-    <label for="form-marker-name">番号:</label>
+    <label id="form-marker-name-label" for="form-marker-name">番号:</label>
     <input type="text" id="form-marker-name" placeholder="マーカー名">
     <select id="kukuri-number" style="display: none;">
       <option value="">番号を選択</option>
@@ -140,7 +141,8 @@
       iconUrl: 'https://cdn-icons-png.flaticon.com/512/3420/3420275.png',
       iconSize: [32, 32],
       iconAnchor: [16, 32]
-    })
+    }),
+    text: null // テキストマーカーは専用描画
   };
 
   const defaultIcon = L.icon({
@@ -231,6 +233,105 @@ async function loadMarkers() {
   });
   sortedDocs.forEach((docSnap) => {
     const data = docSnap.data();
+    // テキストマーカーの場合: ポップアップ・編集・削除を他と同じに
+    if (data.type === "text") {
+      const textIcon = L.divIcon({
+        html: `<div style="font-size:14px; font-weight:bold; color:#333; background:white; border:1px solid #ccc; padding:2px 6px; border-radius:4px; white-space: nowrap;">${data.name}</div>`,
+        className: '',
+        iconSize: null
+      });
+      const textMarker = L.marker([data.lat, data.lng], { icon: textIcon }).addTo(map);
+      markersMap.set(docSnap.id, textMarker);
+
+      const btnId = `delete-btn-${docSnap.id}`;
+      const editBtnId = `edit-btn-${docSnap.id}`;
+      textMarker.bindPopup(`
+        <b id="marker-name-${docSnap.id}">${data.name}</b><br>
+        <small>GPS: ${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}</small><br>
+        ${data.memo ? `<div><small>📝 ${data.memo}</small></div>` : ""}
+        ${data.member ? `<div><small>設置者: ${data.member}</small></div>` : ""}
+        <a href="https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}" target="_blank">📍 地図アプリで開く</a><br>
+        <button id="${editBtnId}">✏️ 編集</button>
+        <button id="${btnId}">🗑 削除</button>
+      `);
+
+      textMarker.on('popupopen', async () => {
+        setTimeout(async () => {
+          const btn = document.getElementById(btnId);
+          if (btn) {
+            btn.onclick = async () => {
+              if (confirm("このマーカーを削除しますか？")) {
+                map.removeLayer(textMarker);
+                markersMap.delete(docSnap.id);
+                await deleteDoc(doc(db, "markers", docSnap.id));
+                await loadMarkers();
+              }
+            };
+          }
+          const editBtn = document.getElementById(editBtnId);
+          if (editBtn) {
+            editBtn.onclick = async () => {
+              const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+              const snap = await getDoc(doc(db, "markers", docSnap.id));
+              const currentData = snap.data();
+              const popupContent = document.createElement("div");
+              popupContent.innerHTML = `
+                <label>名前:</label><br>
+                <input id="edit-name-${docSnap.id}" value="${currentData.name}" style="width: 90%;"><br>
+                <label>メモ:</label><br>
+                <textarea id="edit-memo-${docSnap.id}" rows="3" style="width: 90%;">${currentData.memo || ""}</textarea><br>
+                <label>緯度:</label><br>
+                <input id="edit-lat-${docSnap.id}" value="${currentData.lat}" style="width: 90%;"><br>
+                <label>経度:</label><br>
+                <input id="edit-lng-${docSnap.id}" value="${currentData.lng}" style="width: 90%;"><br>
+                <label>設置者:</label><br>
+                <select id="edit-member-${docSnap.id}" style="width: 90%;"></select><br>
+                <button id="save-edit-${docSnap.id}">保存</button>
+                <button id="cancel-edit-${docSnap.id}">キャンセル</button>
+              `;
+              const memberSelectEdit = popupContent.querySelector(`#edit-member-${docSnap.id}`);
+              memberSelectEdit.innerHTML = "";
+              membersList.forEach(name => {
+                const opt = document.createElement("option");
+                opt.value = name;
+                opt.textContent = name;
+                if (name === currentData.member) opt.selected = true;
+                memberSelectEdit.appendChild(opt);
+              });
+              textMarker.setPopupContent(popupContent);
+              setTimeout(() => {
+                document.getElementById(`save-edit-${docSnap.id}`).onclick = async () => {
+                  const newName = document.getElementById(`edit-name-${docSnap.id}`).value.trim();
+                  const newMemo = document.getElementById(`edit-memo-${docSnap.id}`).value.trim();
+                  const updatedMember = document.getElementById(`edit-member-${docSnap.id}`).value;
+                  const newLat = parseFloat(document.getElementById(`edit-lat-${docSnap.id}`).value);
+                  const newLng = parseFloat(document.getElementById(`edit-lng-${docSnap.id}`).value);
+                  const today = new Date();
+                  const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
+                  const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
+                  await updateDoc(doc(db, "markers", docSnap.id), {
+                    name: newName,
+                    memo: memoWithDate,
+                    member: updatedMember,
+                    lat: newLat,
+                    lng: newLng
+                  });
+                  await loadMarkers();
+                };
+                const cancelBtn = document.getElementById(`cancel-edit-${docSnap.id}`);
+                if (cancelBtn) {
+                  cancelBtn.onclick = () => {
+                    textMarker.closePopup();
+                  };
+                }
+              }, 100);
+            };
+          }
+        }, 100);
+      });
+
+      return;
+    }
     const icon = markerIcons[data.type] || defaultIcon;
     const marker = L.marker([data.lat, data.lng], { icon }).addTo(map);
     // --- 番号だけの常時ラベルをDivIconで追加 ---
@@ -280,7 +381,10 @@ async function loadMarkers() {
       sticky: true,
       opacity: 0.9
     });
-    registerMarkerToList(docSnap.id, data.name, marker.getLatLng(), marker);
+    // テキストマーカー以外のみリストに登録
+    if (data.type !== "text") {
+      registerMarkerToList(docSnap.id, data.name, marker.getLatLng(), marker);
+    }
     // 拡張: 番号ラベルもMapに入れておく(キーを `${docSnap.id}-number` で)
     if (numberMarker) {
       markersMap.set(`${docSnap.id}-number`, numberMarker);
@@ -410,16 +514,24 @@ map.on('click', function (e) {
 
 document.getElementById("form-marker-type").addEventListener("change", () => {
   const type = document.getElementById("form-marker-type").value;
-  document.getElementById("kukuri-prefix-container").style.display = type === "kukuri" ? "block" : "none";
-  document.getElementById("form-marker-name").style.display = type === "kukuri" ? "none" : "inline-block";
-  document.getElementById("kukuri-number").style.display = type === "kukuri" ? "inline-block" : "none";
+  const isKukuri = type === "kukuri";
+  const isText = type === "text";
+  document.getElementById("kukuri-prefix-container").style.display = isKukuri ? "block" : "none";
+  document.getElementById("form-marker-name").style.display = isText || !isKukuri ? "inline-block" : "none";
+  document.getElementById("kukuri-number").style.display = isKukuri ? "inline-block" : "none";
+  const nameLabel = document.getElementById("form-marker-name-label");
+  if (nameLabel) {
+    nameLabel.textContent = isText ? "内容:" : "番号:";
+  }
 });
 
 // 初期選択状態に応じて地名候補と名前欄/番号欄を表示
 const initialType = document.getElementById("form-marker-type").value;
-document.getElementById("kukuri-prefix-container").style.display = initialType === "kukuri" ? "block" : "none";
-document.getElementById("form-marker-name").style.display = initialType === "kukuri" ? "none" : "inline-block";
-document.getElementById("kukuri-number").style.display = initialType === "kukuri" ? "inline-block" : "none";
+const isKukuriInit = initialType === "kukuri";
+const isTextInit = initialType === "text";
+document.getElementById("kukuri-prefix-container").style.display = isKukuriInit ? "block" : "none";
+document.getElementById("form-marker-name").style.display = isTextInit || !isKukuriInit ? "inline-block" : "none";
+document.getElementById("kukuri-number").style.display = isKukuriInit ? "inline-block" : "none";
 
 document.getElementById("add-marker-btn").addEventListener("click", async () => {
   const prefix = document.getElementById("kukuri-prefix").value;
@@ -429,6 +541,10 @@ document.getElementById("add-marker-btn").addEventListener("click", async () => 
     const number = document.getElementById("kukuri-number").value;
     if (!number || !pendingLatLng) return;
     name = (prefix ? prefix + " " : "") + number;
+  } else if (type === "text") {
+    name = document.getElementById("form-marker-name").value.trim();
+    if (!name || !pendingLatLng) return;
+    // テキストマーカーはprefix不要
   } else {
     name = document.getElementById("form-marker-name").value.trim();
     if (!name || !pendingLatLng) return;
