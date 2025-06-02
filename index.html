@@ -343,8 +343,11 @@ async function loadMarkers() {
     const numberOnly = numberOnlyMatch ? numberOnlyMatch[1] : null;
     let numberMarker = null;
     if (numberOnly) {
+      // 番号ラベルは常に numberOnly を表示
+      const numberText = numberOnly;
+      const color = data.status === '撤去中' ? 'darkgray' : (data.status === '設置中' ? 'red' : 'black');
       const numberLabel = L.divIcon({
-        html: `<div class="marker-number-label">${numberOnly}</div>`,
+        html: `<div class="marker-number-label" style="color: ${color};">${numberText}</div>`,
         className: '',
         iconSize: [20, 20],
         iconAnchor: [-10, 10]
@@ -435,6 +438,11 @@ async function loadMarkers() {
               <input id="edit-lng-${docSnap.id}" value="${currentData.lng}" style="width: 90%;"><br>
               <label>設置者:</label><br>
               <select id="edit-member-${docSnap.id}" style="width: 90%;"></select><br>
+              <label>ステイタス:</label><br>
+              <select id="edit-status-${docSnap.id}" style="width: 90%;">
+                <option value="設置中">設置中</option>
+                <option value="撤去中">撤去中</option>
+              </select><br>
               <button id="save-edit-${docSnap.id}">保存</button>
               <button id="cancel-edit-${docSnap.id}">キャンセル</button>
             `;
@@ -447,6 +455,13 @@ async function loadMarkers() {
               if (name === currentData.member) opt.selected = true;
               memberSelectEdit.appendChild(opt);
             });
+            // ステイタス選択の初期値を設定
+            setTimeout(() => {
+              const statusSelect = popupContent.querySelector(`#edit-status-${docSnap.id}`);
+              if (statusSelect && currentData.status) {
+                statusSelect.value = currentData.status;
+              }
+            }, 0);
             marker.setPopupContent(popupContent);
             setTimeout(() => {
               document.getElementById(`save-edit-${docSnap.id}`).onclick = async () => {
@@ -456,6 +471,7 @@ async function loadMarkers() {
                 // 緯度経度の値を取得
                 const newLat = parseFloat(document.getElementById(`edit-lat-${docSnap.id}`).value);
                 const newLng = parseFloat(document.getElementById(`edit-lng-${docSnap.id}`).value);
+                const updatedStatus = document.getElementById(`edit-status-${docSnap.id}`).value;
                 const today = new Date();
                 const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
                 const memoWithDate = newMemo ? `${newMemo}（${dateStr}）` : "";
@@ -464,7 +480,8 @@ async function loadMarkers() {
                   memo: memoWithDate,
                   member: updatedMember,
                   lat: newLat,
-                  lng: newLng
+                  lng: newLng,
+                  status: updatedStatus
                 });
                 // 編集保存後にマーカーを再読込
                 await loadMarkers();
@@ -556,7 +573,7 @@ document.getElementById("add-marker-btn").addEventListener("click", async () => 
     }
   }
   const selectedMember = document.getElementById("form-member-name").value;
-  await addDoc(collection(db, "markers"), {
+  const markerData = {
     name,
     lat: pendingLatLng.lat,
     lng: pendingLatLng.lng,
@@ -564,7 +581,11 @@ document.getElementById("add-marker-btn").addEventListener("click", async () => 
     memo: "",
     member: selectedMember,
     timestamp: new Date()
-  });
+  };
+  if (type === "kukuri") {
+    markerData.status = "設置中";
+  }
+  await addDoc(collection(db, "markers"), markerData);
   // 追加後にマーカーを再読込
   await loadMarkers();
   document.getElementById("marker-form").style.display = "none";
