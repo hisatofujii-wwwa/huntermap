@@ -83,7 +83,7 @@
   <button id="add-member-btn" style="position: absolute; top: 130px; right: 10px; z-index: 1000; padding: 6px 12px; background: white; border: 1px solid #ccc; font-size: 14px;">
     ➕ メンバー追加
   </button>
-  <div id="marker-list" style="display: none; position: absolute; top: 90px; left: 10px; background: white; border: 1px solid #ccc; padding: 10px; z-index: 1000; max-height: 200px; overflow-y: auto; font-size: 14px; width: 200px;">
+  <div id="marker-list" style="display: none; position: absolute; top: 90px; left: 10px; background: white; border: 1px solid #ccc; padding: 10px; z-index: 1000; max-height: 350px; overflow-y: auto; font-size: 14px; width: 200px;">
   </div>
 
   <!-- Leaflet -->
@@ -122,7 +122,7 @@
       memberSelect.appendChild(option);
     });
   }
-  const map = L.map('map', { maxZoom: 22 }).setView([35.6895, 139.6917], 10);
+  const map = L.map('map', { maxZoom: 20 }).setView([35.6895, 139.6917], 10);
 
   const markerIcons = {
     kukuri: L.icon({
