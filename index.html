@@ -212,7 +212,7 @@ function registerMarkerToList(docId, name, latlng, marker) {
   item.style.cursor = "pointer";
   item.style.marginBottom = "4px";
   item.addEventListener("click", () => {
-    map.setView(latlng, 18);
+    map.setView(latlng, map.getZoom());
     markerListDiv.style.display = "none";
   });
   markerListDiv.appendChild(item);
